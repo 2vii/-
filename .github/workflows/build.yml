@@ -1,0 +1,55 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pods
+        run: |
+          cat > Podfile << 'EOF'
+          platform :ios, '16.0'
+          use_frameworks!
+          target 'LXMusic' do
+            pod 'Alamofire'
+            pod 'SwiftyJSON'
+            pod 'Cache'
+          end
+          EOF
+          pod install
+
+      - name: Build
+        run: |
+          xcodebuild create-project \
+            -name LXMusic \
+            -lang swift \
+            -ui swiftui \
+            -platform ios
+          rm -f LXMusic/LXMusic/ContentView.swift
+          mv ContentView.swift LXMusic/LXMusic/
+          xcodebuild archive \
+            -workspace LXMusic.xcworkspace \
+            -scheme LXMusic \
+            -destination 'generic/platform=iOS' \
+            -archivePath LXMusic.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath LXMusic.xcarchive \
+            -exportPath ./ \
+            -exportOptionsPlist <(echo '{"signingStyle":"none","method":"ad-hoc"}') \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LXMusic-Final-IPA
+          path: ./*.ipa
